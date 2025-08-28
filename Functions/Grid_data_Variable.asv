@@ -1,0 +1,61 @@
+function [CCP HITS BSTD GSIZE] = Grid_data(xpierce,ypierce,seis,x,y,z,bin_min,bin_max,min_traces,gauss_width,bstrp,tnames);
+ [X,Y] =  meshgrid(x,y); x = reshape(X,[numel(X),1]); y = reshape(Y,[numel(Y),1]); % create list of x y points
+  CCP = NaN(length(z),length(x)); HITS = NaN(length(z),length(x)); BSTD = NaN(length(z),length(x)); GSIZE = NaN(length(z),length(x));
+  f = waitbar(0,'Building CCP Grid');
+  min_sta = 4;
+  for i=1:length(z); 
+    waitbar(i/length(z),f,'Building CCP Grid')
+     [nrby,D] = (rangesearch([xpierce(i,:);ypierce(i,:)]',[x y],bin_max));
+      parfor j = 1:length(x)
+        if (not(cellfun('isempty',nrby(j))))
+            ind = cell2mat(nrby(j)); 
+            if size(ind,2) < min_traces;
+                continue
+            end
+            DD = cell2mat(D(j));  % setup to weight RFs by distance from center of bin
+            seisd = squeeze(seis(i,ind));
+            anamesd = (tnames(ind));
+            DD(isnan(seisd)) =[];
+            seisd(isnan(seisd)) = [];
+            if isempty(seisd)
+                continue
+            end
+            bsearch = bin_min;
+            bind = find(DD < bsearch);
+            sta_average()
+ 
+           [bootstat,~] = bootstrp(bstrp,@wmean,seis_s,gaus_s);%;,Options=statset(UseParallel=true));
+           %pd = fitdist((squeeze(seis(i,ind))'),'normal');
+           %pd = fitdist(seisd','Kernel','Kernel','normal');
+           %pd_eval = linspace(-1,1,1000);
+           %kd = kde(seisd,EvaluationPoints=pd,Kernel="box")
+           %pind = find(pd.pdf(pd_eval) == max(pd.pdf(pd_eval)));
+           %CCP= pd_eval(pind);
+           %CCP(i,j) = sum(seisd.*gaus)./sum(gaus);
+           % ci95 = paramci(pd);
+           %BSTD(i,j) = std(seisd);
+           % CCP(i,j) = pd.mean;
+           %CCP(i,j) = mean(seisd,'omitnan');
+           BSTD(i,j) = std(bootstat);
+           %BSTD(i,j) = std(seisd);
+           CCP(i,j) = mean(bootstat);%median(seis(i,ind));
+           HITS(i,j) = length(seisd);
+           GSIZE(i,j) = bsearch;
+        else
+          BSTD(i,j) = NaN;
+          CCP(i,j) = NaN;
+          HITS(i,j) = NaN;
+          GSIZE(i,j) = NaN;
+        end
+    end;
+ end;
+CCP = reshape(CCP,[length(z),size(X)]);
+HITS = reshape(HITS,[length(z),size(X)]);
+BSTD = reshape(BSTD,[length(z),size(X)]);
+GSIZE = reshape(GSIZE,[length(z),size(X)]);
+close(f);
+end
+
+function tmean = wmean(sample,weight)
+     tmean = sum(sample.*weight)./sum(weight);
+end
